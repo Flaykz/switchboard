@@ -117,7 +117,7 @@ body { display: flex; flex-direction: column; }
   align-items: center;
   gap: 12px;
   cursor: pointer;
-  opacity: 0.8;
+  opacity: 0.95;
   flex-shrink: 0;
   margin-left: auto;
   transition: opacity 0.15s;
@@ -131,7 +131,7 @@ body { display: flex; flex-direction: column; }
 }
 .quota-label {
   font-size: 10px;
-  color: #7a7a90;
+  color: #b4b8d0;
   white-space: nowrap;
 }
 #status-bar-quota:hover { opacity: 1; }
@@ -154,7 +154,7 @@ body { display: flex; flex-direction: column; }
 .quota-fill.quota-high { background: #e05070; }
 .quota-pct {
   font-size: 10px;
-  color: #7a7a90;
+  color: #b4b8d0;
   white-space: nowrap;
 }
 
@@ -900,6 +900,20 @@ body { display: flex; flex-direction: column; }
   font-size: 10px;
   color: #707088;
   margin-top: 3px;
+}
+
+/* Sidebar session items: time on the left, short session id on the right */
+.session-item .session-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.session-short-id {
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  color: #5a5a72;
+  flex-shrink: 0;
 }
 
 /* ---- Session action buttons ---- */

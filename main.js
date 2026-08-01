@@ -8,6 +8,15 @@ const log = require('electron-log');
 // getFolderIndexMtimeMs moved to session-cache.js
 const { startMcpServer, shutdownMcpServer, shutdownAll: shutdownAllMcp, resolvePendingDiff, rekeyMcpServer, cleanStaleLockFiles } = require('./mcp-bridge');
 const { fetchAndTransformUsage } = require('./claude-auth');
+
+// SWITCHBOARD_DATA_DIR isolates a dev/test instance from the installed app:
+// db.js puts switchboard.db under it, and pointing userData there gives the
+// instance its own single-instance lock (requestSingleInstanceLock keys on
+// userData), so both can run side by side.
+if (process.env.SWITCHBOARD_DATA_DIR) {
+  app.setPath('userData', path.resolve(process.env.SWITCHBOARD_DATA_DIR, 'electron'));
+}
+
 log.transports.file.level = app.isPackaged ? 'info' : 'debug';
 log.transports.console.level = app.isPackaged ? 'info' : 'debug';
 

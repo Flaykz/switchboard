@@ -73,9 +73,9 @@ function refreshFolder(folder) {
 
   // Get what's currently cached for this folder
   const cachedSessions = getCachedByFolder(folder);
-  const cachedMap = new Map(); // sessionId → modified ISO string
+  const cachedMap = new Map(); // sessionId → fileMtime ISO string (invalidation key)
   for (const row of cachedSessions) {
-    cachedMap.set(row.sessionId, row.modified);
+    cachedMap.set(row.sessionId, row.fileMtime);
   }
 
   // Scan current .jsonl files

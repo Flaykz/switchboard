@@ -111,10 +111,6 @@ let searchMatchProjectPaths = null; // Set<string> of project paths matched by n
 const attentionSessions = new Set(); // sessions needing user action (OSC 9)
 const responseReadySessions = new Set(); // Claude finished, user hasn't looked (terminal state)
 const sessionBusyState = new Map(); // sessionId → boolean (currently active)
-const lastActivityTime = new Map(); // sessionId → Date of last terminal output
-
-// Noise patterns — these don't count as activity
-const activityNoiseRe = /file-history-snapshot|^\s*$/;
 
 // Central activity dispatcher
 function setActivity(sessionId, active) {
@@ -142,12 +138,6 @@ function setActivity(sessionId, active) {
     const item = document.querySelector(`.session-item[data-session-id="${sessionId}"]`);
     if (item) item.classList.toggle('cli-busy', active);
   }
-}
-
-// Terminal output activity — updates lastActivityTime only, busy state driven by backend
-function trackActivity(sessionId, data) {
-  if (activityNoiseRe.test(data)) return;
-  lastActivityTime.set(sessionId, new Date());
 }
 
 function clearUnread(sessionId) {
@@ -199,8 +189,6 @@ window.api.onTerminalData((sessionId, data) => {
       scheduleFlush(sessionId, buf);
     }
   }
-  // Update last activity time (noise-filtered)
-  trackActivity(sessionId, data);
 });
 
 window.api.onSessionDetected((tempId, realId) => {
@@ -613,15 +601,14 @@ scheduleActiveSessionsPoll();
 
 // Refresh sidebar timeago labels every 30s so "just now" ticks forward
 setInterval(() => {
-  if (lastActivityTime.size === 0) return;
-  for (const [sessionId, time] of lastActivityTime) {
+  for (const [sessionId, session] of sessionMap) {
+    if (!session.modified) continue;
     const item = document.getElementById('si-' + sessionId);
     if (!item) continue;
-    const meta = item.querySelector('.session-meta');
-    if (!meta) continue;
-    const session = sessionMap.get(sessionId);
-    const msgSuffix = session?.messageCount ? ' \u00b7 ' + session.messageCount + ' msgs' : '';
-    meta.textContent = formatDate(time) + msgSuffix;
+    const timeEl = item.querySelector('.session-time');
+    if (!timeEl) continue;
+    const msgSuffix = session.messageCount ? ' \u00b7 ' + session.messageCount + ' msgs' : '';
+    timeEl.textContent = formatDate(new Date(session.modified)) + msgSuffix;
   }
 }, 30000);
 

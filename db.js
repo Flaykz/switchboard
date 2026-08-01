@@ -2,14 +2,20 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const os = require('os');
 
-const DATA_DIR = path.join(os.homedir(), '.switchboard');
+// SWITCHBOARD_DATA_DIR overrides the data dir so a dev/test instance can run
+// alongside the installed app without sharing its DB (main.js also isolates
+// Electron userData / the single-instance lock off the same variable).
+const DATA_DIR = process.env.SWITCHBOARD_DATA_DIR
+  ? path.resolve(process.env.SWITCHBOARD_DATA_DIR)
+  : path.join(os.homedir(), '.switchboard');
 const fs = require('fs');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const DB_PATH = path.join(DATA_DIR, 'switchboard.db');
 
-// Migrate from old locations if needed
-const OLD_LOCATIONS = [
+// Migrate from old locations if needed — never when running against an
+// override dir, so a dev instance can't relocate the real app's legacy DB.
+const OLD_LOCATIONS = process.env.SWITCHBOARD_DATA_DIR ? [] : [
   path.join(os.homedir(), '.claude', 'browser', 'switchboard.db'),
   path.join(os.homedir(), '.claude', 'browser', 'session-browser.db'),
   path.join(os.homedir(), '.claude', 'session-browser.db'),
@@ -49,7 +55,8 @@ db.exec(`
     modified TEXT,
     messageCount INTEGER DEFAULT 0,
     slug TEXT,
-    aiTitle TEXT
+    aiTitle TEXT,
+    fileMtime TEXT
   )
 `);
 
@@ -96,6 +103,16 @@ const migrations = [
   // remains until the user renames manually, and only future indexes are clean.
   (db) => {
     try { db.exec('ALTER TABLE session_cache ADD COLUMN aiTitle TEXT'); } catch {}
+    try { db.exec('DELETE FROM session_cache'); } catch {}
+    try { db.exec('DELETE FROM cache_meta'); } catch {}
+  },
+  // v4: Split display time from cache invalidation. `modified` now holds the last
+  // message timestamp from the JSONL (resuming a session appends untimestamped
+  // bookkeeping records that bump mtime, making idle sessions show "just now");
+  // the new fileMtime column takes over as the re-index change-detection key.
+  // Clear cache so a re-index repopulates both columns.
+  (db) => {
+    try { db.exec('ALTER TABLE session_cache ADD COLUMN fileMtime TEXT'); } catch {}
     try { db.exec('DELETE FROM session_cache'); } catch {}
     try { db.exec('DELETE FROM cache_meta'); } catch {}
   },
@@ -152,16 +169,16 @@ const stmts = {
   cacheCount: db.prepare('SELECT COUNT(*) as cnt FROM session_cache'),
   cacheGetAll: db.prepare('SELECT * FROM session_cache'),
   cacheUpsert: db.prepare(`
-    INSERT INTO session_cache (sessionId, folder, projectPath, summary, firstPrompt, created, modified, messageCount, slug, aiTitle)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO session_cache (sessionId, folder, projectPath, summary, firstPrompt, created, modified, messageCount, slug, aiTitle, fileMtime)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(sessionId) DO UPDATE SET
       folder = excluded.folder, projectPath = excluded.projectPath,
       summary = excluded.summary, firstPrompt = excluded.firstPrompt,
       created = excluded.created, modified = excluded.modified,
       messageCount = excluded.messageCount, slug = excluded.slug,
-      aiTitle = excluded.aiTitle
+      aiTitle = excluded.aiTitle, fileMtime = excluded.fileMtime
   `),
-  cacheGetByFolder: db.prepare('SELECT sessionId, modified FROM session_cache WHERE folder = ?'),
+  cacheGetByFolder: db.prepare('SELECT sessionId, fileMtime FROM session_cache WHERE folder = ?'),
   cacheGetFolder: db.prepare('SELECT folder FROM session_cache WHERE sessionId = ?'),
   cacheGetSession: db.prepare('SELECT * FROM session_cache WHERE sessionId = ?'),
   cacheDeleteSession: db.prepare('DELETE FROM session_cache WHERE sessionId = ?'),
@@ -246,7 +263,7 @@ const upsertCachedSessionsBatch = db.transaction((sessions) => {
     stmts.cacheUpsert.run(
       s.sessionId, s.folder, s.projectPath, s.summary,
       s.firstPrompt, s.created, s.modified, s.messageCount || 0,
-      s.slug || null, s.aiTitle || null
+      s.slug || null, s.aiTitle || null, s.fileMtime || null
     );
   }
 });

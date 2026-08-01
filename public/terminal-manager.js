@@ -344,10 +344,6 @@ function createTerminalEntry(session) {
     entry.ptyTitle = title;
     if (activeSessionId === entry.session.sessionId) updatePtyTitle();
   });
-  terminal.onBell(() => {
-    trackActivity(entry.session.sessionId, '\x07');
-  });
-
   return entry;
 }
 
