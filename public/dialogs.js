@@ -261,6 +261,7 @@ async function showNewSessionDialog(project) {
 
   function close() {
     overlay.remove();
+    document.removeEventListener('keydown', onKey);
   }
 
   function start() {
@@ -291,8 +292,8 @@ async function showNewSessionDialog(project) {
 
   // Keyboard support
   function onKey(e) {
-    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); }
-    if (e.key === 'Enter' && !e.target.matches('input')) { start(); document.removeEventListener('keydown', onKey); }
+    if (e.key === 'Escape') close();
+    if (e.key === 'Enter' && !e.target.matches('input')) start();
   }
   document.addEventListener('keydown', onKey);
 }
@@ -381,6 +382,7 @@ async function showResumeSessionDialog(session) {
 
   function close() {
     overlay.remove();
+    document.removeEventListener('keydown', onKey);
   }
 
   function resume() {
@@ -406,8 +408,8 @@ async function showResumeSessionDialog(session) {
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
   function onKey(e) {
-    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); }
-    if (e.key === 'Enter' && !e.target.matches('input')) { resume(); document.removeEventListener('keydown', onKey); }
+    if (e.key === 'Escape') close();
+    if (e.key === 'Enter' && !e.target.matches('input')) resume();
   }
   document.addEventListener('keydown', onKey);
 }
