@@ -130,7 +130,6 @@ body { display: flex; flex-direction: column; }
   flex-shrink: 0;
 }
 .quota-label {
-  font-size: 10px;
   color: #b4b8d0;
   white-space: nowrap;
 }
@@ -153,7 +152,6 @@ body { display: flex; flex-direction: column; }
 .quota-fill.quota-mid { background: #e8a030; }
 .quota-fill.quota-high { background: #e05070; }
 .quota-pct {
-  font-size: 10px;
   color: #b4b8d0;
   white-space: nowrap;
 }
