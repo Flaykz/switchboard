@@ -31,7 +31,6 @@ const { startScheduler } = require('./schedule-runner');
 const { encodeProjectPath } = require('./encode-project-path');
 
 
-
 // --- Auto-updater (only in packaged builds) ---
 let autoUpdater = null;
 if (app.isPackaged || process.env.FORCE_UPDATER) {
@@ -267,7 +266,6 @@ sessionCache.init({
 });
 const { readSessionFile, readFolderFromFilesystem, refreshFolder, reconcileCacheFromFilesystem,
         buildProjectsFromCache, notifyRendererProjectsChanged, sendStatus, populateCacheViaWorker } = sessionCache;
-
 
 // --- IPC: browse-folder ---
 ipcMain.handle('browse-folder', async () => {
@@ -918,36 +916,6 @@ ipcMain.handle('read-session-jsonl', (_event, sessionId) => {
     return { entries };
   } catch (err) {
     return { error: err.message };
-  }
-});
-
-ipcMain.handle('get-session-tokens', (_event, sessionId) => {
-  const folder = getCachedFolder(sessionId);
-  if (!folder) return null;
-  const jsonlPath = path.join(PROJECTS_DIR, folder, sessionId + '.jsonl');
-  try {
-    const stat = fs.statSync(jsonlPath);
-    const readSize = Math.min(stat.size, 32768);
-    const buf = Buffer.alloc(readSize);
-    const fd = fs.openSync(jsonlPath, 'r');
-    fs.readSync(fd, buf, 0, readSize, stat.size - readSize);
-    fs.closeSync(fd);
-    const tail = buf.toString('utf-8');
-    const lines = tail.split('\n').filter(Boolean).reverse();
-    for (const line of lines) {
-      try {
-        const entry = JSON.parse(line);
-        const u = entry.message?.usage;
-        if (u && (entry.type === 'assistant' || entry.message?.role === 'assistant')) {
-          const contextTokens = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
-          const model = entry.message?.model || entry.model || '';
-          return { contextTokens, model };
-        }
-      } catch {}
-    }
-    return null;
-  } catch {
-    return null;
   }
 });
 

@@ -59,7 +59,6 @@ function setActiveSession(id) {
   else sessionStorage.removeItem('activeSessionId');
   // Update file panel to show this session's open files/diffs
   if (typeof switchPanel === 'function') switchPanel(id);
-  refreshCtxGauge(id);
 }
 // Persist slug group expand state across reloads
 function getExpandedSlugs() {
@@ -342,7 +341,6 @@ window.api.onTerminalNotification((sessionId, message) => {
 // --- CLI busy state (OSC 0 title spinner detection) ---
 window.api.onCliBusyState((sessionId, busy) => {
   setActivity(sessionId, busy);
-  if (!busy && sessionId === activeSessionId) refreshCtxGauge(sessionId);
 });
 
 // --- Single entry point for all sidebar renders ---
@@ -1146,40 +1144,63 @@ const updaterHandler = (type, data) => {
 };
 window.api.onUpdaterEvent(updaterHandler);
 
-// --- Context window gauge in status bar ---
-const ctxGaugeEl = document.getElementById('status-bar-ctx');
-const CTX_MAX = 200000;
-function fmtTokens(n) { return n >= 1000 ? Math.round(n / 1000) + 'K' : String(n); }
-async function refreshCtxGauge(sessionId) {
-  if (!sessionId) { ctxGaugeEl.style.display = 'none'; return; }
-  try {
-    const result = await window.api.getSessionTokens(sessionId);
-    if (!result) { ctxGaugeEl.style.display = 'none'; return; }
-    const { contextTokens } = result;
-    const pct = Math.round((contextTokens / CTX_MAX) * 100);
-    ctxGaugeEl.style.display = '';
-    ctxGaugeEl.title = `Context : ${fmtTokens(contextTokens)} / ${fmtTokens(CTX_MAX)} tokens (${pct}%)`;
-    const fill = ctxGaugeEl.querySelector('.ctx-fill');
-    fill.style.width = Math.min(Math.max(pct, 1), 100) + '%';
-    fill.className = 'ctx-fill' + (pct >= 80 ? ' ctx-high' : pct >= 60 ? ' ctx-mid' : '');
-    ctxGaugeEl.querySelector('.ctx-text').textContent = fmtTokens(contextTokens) + ' / 200K';
-  } catch {}
+// --- Quota gauges in status bar ---
+// One bar per limit window the usage API reports — a 5-hour session window, a
+// weekly all-models window, and a weekly window per model. Which one bites
+// first varies, and the 5-hour is usually the emptiest while resetting within
+// the day, so showing a single window would read as "plenty left" while a
+// weekly one is the one actually running out. Rows come from the API
+// self-describing, so a newly launched model gets a bar without a code change.
+const quotaGaugeEl = document.getElementById('status-bar-quota');
+
+// Full labels ("Week (all models)") are too long for a status bar; the tooltip
+// carries them in full.
+function shortQuotaLabel(row) {
+  if (row.kind === 'session') return '5h';
+  if (row.kind === 'weekly_all') return 'Week';
+  return row.model || 'Week';
 }
 
-// --- Quota gauge (5h session) in status bar ---
-const quotaGaugeEl = document.getElementById('status-bar-quota');
+function buildQuotaBar(row) {
+  const wrap = document.createElement('span');
+  wrap.className = 'quota-item';
+
+  const label = document.createElement('span');
+  label.className = 'quota-label';
+  label.textContent = shortQuotaLabel(row);
+  wrap.appendChild(label);
+
+  const track = document.createElement('span');
+  track.className = 'quota-track';
+  const fill = document.createElement('span');
+  const pct = row.percent;
+  fill.className = 'quota-fill' + (pct >= 80 ? ' quota-high' : pct >= 60 ? ' quota-mid' : '');
+  fill.style.width = Math.min(Math.max(pct, 1), 100) + '%';
+  track.appendChild(fill);
+  wrap.appendChild(track);
+
+  const pctEl = document.createElement('span');
+  pctEl.className = 'quota-pct';
+  pctEl.textContent = pct + '%';
+  wrap.appendChild(pctEl);
+
+  wrap.title = `${row.label}: ${pct}%` + (row.reset ? ` \u2014 resets ${row.reset}` : '');
+  return wrap;
+}
+
 async function refreshQuotaGauge() {
   try {
     const usage = await window.api.getUsage();
-    const pct = usage?.session;
-    const reset = usage?.sessionReset;
-    if (pct === undefined) { quotaGaugeEl.style.display = 'none'; return; }
+    // Prefer the API's self-describing rows; fall back to the flat 5-hour keys.
+    const rows = Array.isArray(usage?.limits) && usage.limits.length
+      ? usage.limits
+      : (usage?.session !== undefined
+        ? [{ kind: 'session', label: 'Current session', percent: usage.session, reset: usage.sessionReset }]
+        : []);
+    if (!rows.length) { quotaGaugeEl.style.display = 'none'; return; }
+
+    quotaGaugeEl.replaceChildren(...rows.map(buildQuotaBar));
     quotaGaugeEl.style.display = '';
-    quotaGaugeEl.title = `5h quota : ${pct}%${reset ? ' — Resets ' + reset : ''}`;
-    const fill = quotaGaugeEl.querySelector('.quota-fill');
-    fill.style.width = Math.max(pct, 1) + '%';
-    fill.className = 'quota-fill' + (pct >= 80 ? ' quota-high' : pct >= 60 ? ' quota-mid' : '');
-    quotaGaugeEl.querySelector('.quota-pct').textContent = pct + '%';
   } catch {}
 }
 refreshQuotaGauge();

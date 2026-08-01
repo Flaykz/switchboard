@@ -5,12 +5,8 @@ dist/
 *.db-shm
 public/codemirror-bundle.js
 .DS_Store
+.idea/
 *.pem
 .env
 .cache/
 dev-app-update.yml
-/.idea/.gitignore
-/.idea/misc.xml
-/.idea/modules.xml
-/.idea/switchboard.iml
-/.idea/vcs.xml
