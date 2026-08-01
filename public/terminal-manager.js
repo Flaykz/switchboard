@@ -34,6 +34,25 @@ function shouldSendSpaceDirectly(e) {
     && !isImeComposing(e);
 }
 
+// Decode an OSC 52 payload into the text the program wants on the clipboard.
+// Payload is "<selection>;<base64>", e.g. "c;aGVsbG8=".
+//
+// Returns null when there is nothing to write — an empty payload, or a read-back
+// query ("<selection>;?"). The read-back case is a deliberate refusal, not a gap:
+// answering it would write the user's clipboard contents back into the terminal,
+// letting any program running in the session exfiltrate whatever they last
+// copied. We consume the sequence and stay silent. Do not "finish" this by
+// implementing the query response.
+//
+// Throws on malformed base64 (atob), which the caller reports as unhandled.
+function decodeOsc52Payload(payload) {
+  const sep = payload.indexOf(';');
+  const b64 = sep === -1 ? payload : payload.slice(sep + 1);
+  if (!b64 || b64 === '?') return null;
+  const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 function setupTerminalKeyBindings(terminal, container, getSessionId, { onFind } = {}) {
   terminal.attachCustomKeyEventHandler((e) => {
     // Cmd/Ctrl+F → open terminal search bar
@@ -83,7 +102,7 @@ function setupTerminalKeyBindings(terminal, container, getSessionId, { onFind } 
     if (!isMac && e.key === 'c' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
       if (terminal.hasSelection()) {
         if (e.type === 'keydown') {
-          navigator.clipboard.writeText(terminal.getSelection()).catch(() => {});
+          window.api.writeClipboard(terminal.getSelection());
         }
         return false;
       }
@@ -219,6 +238,24 @@ function createTerminalEntry(session) {
       },
       allowNonHttpProtocols: true,
     },
+  });
+
+  // OSC 52 — let the program inside the terminal set the system clipboard (this is how
+  // Claude Code copies). xterm doesn't wire this up itself, so we do.
+  // Route through the main process — see writeClipboard — because the renderer clipboard
+  // is unreliable on Wayland.
+  terminal.parser.registerOscHandler(52, (payload) => {
+    let text;
+    try {
+      text = decodeOsc52Payload(payload);
+    } catch {
+      return false;
+    }
+    // null = read-back query or empty payload: consumed, and deliberately not
+    // answered. See decodeOsc52Payload.
+    if (text === null) return true;
+    window.api.writeClipboard(text).catch(() => {});
+    return true;
   });
 
   const fitAddon = new FitAddon.FitAddon();
@@ -400,5 +437,5 @@ function setupDragAndDrop(container, getSessionId) {
 // Expose pure key-handling predicates to Node for unit testing. No-op in the
 // browser, where this file is loaded as a plain <script> and `module` is undefined.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { isImeComposing, shouldSendSpaceDirectly };
+  module.exports = { isImeComposing, shouldSendSpaceDirectly, decodeOsc52Payload };
 }
