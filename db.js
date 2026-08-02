@@ -106,16 +106,9 @@ const migrations = [
     try { db.exec('DELETE FROM session_cache'); } catch {}
     try { db.exec('DELETE FROM cache_meta'); } catch {}
   },
-  // v4: Split display time from cache invalidation. `modified` now holds the last
-  // message timestamp from the JSONL (resuming a session appends untimestamped
-  // bookkeeping records that bump mtime, making idle sessions show "just now");
-  // the new fileMtime column takes over as the re-index change-detection key.
-  // Clear cache so a re-index repopulates both columns.
-  (db) => {
-    try { db.exec('ALTER TABLE session_cache ADD COLUMN fileMtime TEXT'); } catch {}
-    try { db.exec('DELETE FROM session_cache'); } catch {}
-    try { db.exec('DELETE FROM cache_meta'); } catch {}
-  },
+  // v4: (superseded — fileMtime is added by the schema reconciliation below,
+  // keyed on column presence rather than version number)
+  () => {},
 ];
 
 const currentDbVersion = (() => {
@@ -130,6 +123,30 @@ for (let i = currentDbVersion; i < migrations.length; i++) {
 }
 if (migrations.length > currentDbVersion) {
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('db_version', ?)").run(JSON.stringify(migrations.length));
+}
+
+// --- Schema reconciliation ---
+// Version-numbered migrations cannot be trusted to add columns: a DB already
+// migrated to a HIGHER version by a build from a parallel branch skips this
+// branch's migrations entirely (a db_version-5 DB from the subagent branch
+// never ran our v4, so the fileMtime ALTER never happened and every prepare()
+// below crashed the app at startup). Required columns are therefore ensured by
+// inspecting the actual schema, independent of db_version. Errors here are
+// deliberately NOT swallowed: a transient failure (e.g. SQLITE_BUSY) must not
+// be recorded as migrated — the next launch simply retries.
+{
+  const cols = new Set(db.prepare('PRAGMA table_info(session_cache)').all().map(c => c.name));
+  if (!cols.has('aiTitle')) db.exec('ALTER TABLE session_cache ADD COLUMN aiTitle TEXT');
+  if (!cols.has('fileMtime')) {
+    db.exec('ALTER TABLE session_cache ADD COLUMN fileMtime TEXT');
+    // fileMtime's introduction changed what `modified` means (file mtime →
+    // last-message timestamp), so cached values written by pre-fileMtime code
+    // are stale. Clear the cache to force a full re-index; without this,
+    // dormant folders would keep mtime-based times indefinitely because the
+    // folder-level index gate never re-reads them.
+    db.exec('DELETE FROM session_cache');
+    db.exec('DELETE FROM cache_meta');
+  }
 }
 
 // --- FTS5 full-text search ---
