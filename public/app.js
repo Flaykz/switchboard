@@ -265,7 +265,7 @@ window.api.onProcessExited((sessionId, exitCode) => {
     try {
       const colour = exitCode === 0 ? '\x1b[2m' : '\x1b[33m';
       entry.terminal.write(
-        `\r\n${colour}── session exited (code ${exitCode}) — re-click this session in the sidebar to relaunch, or click another to dismiss ──\x1b[0m\r\n`
+        `\r\n${colour}── session exited (code ${exitCode}) ──\x1b[0m\r\n`
       );
     } catch {}
   }
