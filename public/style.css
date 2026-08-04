@@ -938,6 +938,7 @@ body { display: flex; flex-direction: column; }
 .session-launch-config-btn,
 .session-fork-btn,
 .session-jsonl-btn,
+.session-unread-btn,
 .session-archive-btn {
   cursor: pointer;
   background: none;
@@ -964,6 +965,14 @@ body { display: flex; flex-direction: column; }
   color: #5a7a6a;
 }
 
+.session-unread-btn {
+  color: #4a7f96;
+}
+
+.session-item.response-ready .session-unread-btn {
+  color: #4fc3f7;
+}
+
 .session-archive-btn {
   color: #6068b0;
 }
@@ -981,6 +990,11 @@ body { display: flex; flex-direction: column; }
 .session-fork-btn:hover {
   color: #3ecf5a;
   background: rgba(62,207,90,0.1);
+}
+
+.session-unread-btn:hover {
+  color: #4fc3f7;
+  background: rgba(79,195,247,0.1);
 }
 
 .session-archive-btn:hover {

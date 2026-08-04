@@ -7,7 +7,8 @@
 // Depends on: cleanDisplayName, formatDate, escapeHtml (utils.js), ICONS (icons.js),
 // showSession (terminal-manager.js), confirmAndStopSession, pollActiveSessions,
 // showNewSessionPopover, openSettingsViewer, showResumeSessionDialog,
-// showJsonlViewer, forkSession, openSession, loadProjects (app.js/dialogs.js)
+// showJsonlViewer, forkSession, openSession, loadProjects, markUnread,
+// clearUnread, refreshSidebar (app.js/dialogs.js)
 
 function slugId(slug) {
   return 'slug-' + slug.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -580,6 +581,19 @@ function rebindSidebarEvents(projects) {
       };
     }
 
+    const unreadBtn = item.querySelector('.session-unread-btn');
+    if (unreadBtn) {
+      unreadBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (responseReadySessions.has(session.sessionId)) {
+          clearUnread(session.sessionId);
+        } else {
+          markUnread(session.sessionId);
+        }
+        refreshSidebar();
+      };
+    }
+
     const launchConfigBtn = item.querySelector('.session-launch-config-btn');
     if (launchConfigBtn) {
       launchConfigBtn.onclick = (e) => {
@@ -727,7 +741,14 @@ function buildSessionItem(session) {
   launchConfigBtn.title = 'Resume with config';
   launchConfigBtn.innerHTML = ICONS.launchConfig(14);
 
+  const isUnread = responseReadySessions.has(session.sessionId);
+  const unreadBtn = document.createElement('button');
+  unreadBtn.className = 'session-unread-btn';
+  unreadBtn.title = isUnread ? 'Mark as read' : 'Mark as unread';
+  unreadBtn.innerHTML = isUnread ? ICONS.markRead(14) : ICONS.markUnread(14);
+
   actions.appendChild(stopBtn);
+  actions.appendChild(unreadBtn);
   if (session.type !== 'terminal') {
     actions.appendChild(forkBtn);
     actions.appendChild(jsonlBtn);

@@ -148,6 +148,20 @@ function clearUnread(sessionId) {
   }
 }
 
+// User-initiated: put a session back into the response-ready state, as if
+// Claude had just finished a turn the user hasn't looked at yet. Mirrors the
+// busy→idle transition in setActivity so the sidebar re-renders consistently.
+function markUnread(sessionId) {
+  if (responseReadySessions.has(sessionId)) return;
+  responseReadySessions.add(sessionId);
+  sessionBusyState.set(sessionId, false);
+  const item = document.querySelector(`.session-item[data-session-id="${sessionId}"]`);
+  if (item) {
+    item.classList.remove('cli-busy');
+    item.classList.add('response-ready');
+  }
+}
+
 function clearNotifications(sessionId) {
   clearUnread(sessionId);
   attentionSessions.delete(sessionId);
